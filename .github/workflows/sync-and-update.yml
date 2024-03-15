@@ -6,8 +6,8 @@ on:
     - cron: '* */2 * * *' # 每2小时触发, 对于一些更新不那么频繁的项目可以设置为每天一次, 低碳一点
 
 env:
-  FILE_PATH: ""
-  FILE_URL: ""
+  FILE_PATH: "upstream/Chart.yaml"
+  FILE_URL: "https://raw.githubusercontent.com/bitnami/charts/main/bitnami/postgresql/Chart.yaml"
 
   # Use docker.io for Docker Hub if empty
   REGISTRY: ghcr.io
@@ -47,8 +47,8 @@ jobs:
         id: extract_versions
         run: |
           # 修改这个地方来匹配对应的 tag 和 version
-          VERSION=
-          VERSION_FULL=
+          VERSION=$(grep -oP 'appVersion:\s*\K\d+\.\d+\.\d+' $FILE_PATH)
+          VERSION_FULL=$(grep -oP 'docker.io/bitnami/postgresql:\K\d+\.\d+\.\d+-debian-\d+-r\d+' $FILE_PATH) 
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
@@ -63,27 +63,18 @@ jobs:
         if: steps.check_modification.outputs.modified == 'true'
         run: |
           # 更改 Dockerfile 中的对应参数
+          sed -i "s/SOURCE_VERSION=[0-9.]*$/SOURCE_VERSION=${{ steps.extract_versions.outputs.version }}/" Dockerfile
+          sed -i "s/DOCKER_TAG=[0-9.]*-[a-zA-Z0-9-]*$/DOCKER_TAG=${{ steps.extract_versions.outputs.version_full }}/" Dockerfile
 
-      - name: Push file to repo
-        if: steps.check_modification.outputs.modified == 'true'
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-          git add Dockerfile $FILE_PATH
-          
-          # 提交更改
-          git commit -m "Update files"
-          
-          # 推送更改到远程存储库
-          git push
-
-      # 如果文件未修改，则退出工作流程
-      - name: Exit if file is not modified
-        if: steps.check_modification.outputs.modified == 'false'
-        run: |
-          echo "File has not been modified. Exiting workflow."
-          exit 0
+      - name: Upload file
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-files
+          retention-days: 1
+          path: |
+            Dockerfile
+            upstream/**
+            
 
   build-docker:
     runs-on: ubuntu-latest
@@ -98,6 +89,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Download repo files
+        uses: actions/download-artifact@v4
+        with:
+          name: repo-files
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
@@ -159,3 +155,30 @@ jobs:
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
         run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+  push-files:
+    runs-on: ubuntu-latest
+    needs: [build-docker] 
+    if: ${{ needs.check.outputs.modified == 'true' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download repo files
+        uses: actions/download-artifact@v4
+        with:
+          name: repo-files
+      
+      - name: Push file to repo
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          git add Dockerfile $FILE_PATH
+          
+          # 提交更改
+          git commit -m "Update files"
+          
+          # 推送更改到远程存储库
+          git push
