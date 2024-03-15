@@ -1,4 +1,3 @@
-ARG SOURCE_VERSION=16.2.0
 ARG DOCKER_TAG=16.2.0-debian-12-r8
 
 FROM bitnami/postgresql:${DOCKER_TAG} AS build

@@ -22,7 +22,6 @@ jobs:
 
     outputs:
       modified: ${{ steps.check_modification.outputs.modified }}
-      version: ${{ steps.extract_versions.outputs.version }}
       version_full: ${{ steps.extract_versions.outputs.version_full }}
 
     steps:
@@ -47,23 +46,14 @@ jobs:
         id: extract_versions
         run: |
           # 修改这个地方来匹配对应的 tag 和 version
-          VERSION=$(grep -oP 'appVersion:\s*\K\d+\.\d+\.\d+' $FILE_PATH)
           VERSION_FULL=$(grep -oP 'docker.io/bitnami/postgresql:\K\d+\.\d+\.\d+-debian-\d+-r\d+' $FILE_PATH) 
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
-
-      - name: Use extracted versions
-        if: steps.check_modification.outputs.modified == 'true'
-        run: |
-          echo "Version: ${{ steps.extract_versions.outputs.version }}"
-          echo "Full version: ${{ steps.extract_versions.outputs.version_full }}"
 
       - name: Update Dockerfile
         if: steps.check_modification.outputs.modified == 'true'
         run: |
           # 更改 Dockerfile 中的对应参数
-          sed -i "s/SOURCE_VERSION=[0-9.]*$/SOURCE_VERSION=${{ steps.extract_versions.outputs.version }}/" Dockerfile
           sed -i "s/DOCKER_TAG=[0-9.]*-[a-zA-Z0-9-]*$/DOCKER_TAG=${{ steps.extract_versions.outputs.version_full }}/" Dockerfile
 
       - name: Upload file
