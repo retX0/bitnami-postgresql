@@ -1,4 +1,4 @@
-ARG DOCKER_TAG=16.4.0-debian-12-r8
+ARG DOCKER_TAG=16.4.0-debian-12-r9
 
 FROM bitnami/postgresql:${DOCKER_TAG} AS build
 USER root
